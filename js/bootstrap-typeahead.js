@@ -27,6 +27,7 @@
         that.$element = $(element);
         that.options = $.extend({}, $.fn.typeahead.defaults, options);
         that.$menu = $(that.options.menu).insertAfter(that.$element);
+        that.$url = that.$element[0].getAttribute("data-url");
 
         // Method overrides
         that.eventSupported = that.options.eventSupported || that.eventSupported;
@@ -46,7 +47,7 @@
 
             if (typeof ajax === 'string') {
                 that.ajax = $.extend({}, $.fn.typeahead.defaults.ajax, {
-                    url: ajax
+                    url: that.$url ? that.$url : ajax
                 });
             } else {
                 if (typeof ajax.displayField === 'string') {
@@ -57,6 +58,8 @@
                 }
 
                 that.ajax = $.extend({}, $.fn.typeahead.defaults.ajax, ajax);
+                if(that.$url) {that.ajax.url = that.$url;}
+
             }
 
             if (!that.ajax.url) {
@@ -97,8 +100,9 @@
                 this.options.onSelect({
                     value: value,
                     text: text
-                });
+                }, this.$element);
             }
+            this.$element.prop('data-value', value);
             this.$element
                 .val(this.updater(text))
                 .change();
@@ -172,7 +176,7 @@
                     query: query
                 };
                 this.ajax.xhr = $.ajax({
-                    url: this.ajax.url,
+                    url: this.$url ? this.$url : this.ajax.url,
                     data: params,
                     success: $.proxy(this.ajaxSource, this),
                     type: this.ajax.method || 'get',
@@ -198,7 +202,13 @@
             that.ajax.data = data;
 
             // Manipulate objects
-            items = that.grepper(that.ajax.data) || [];
+            if (that.options.responseObject) {
+                var itemsObj = that.options.responseObject;
+                items = that.grepper(that.ajax.data[itemsObj]) || [];
+            }else{
+                items = that.grepper(that.ajax.data) || [];
+            }
+
             if (!items.length) {
                 return that.shown ? that.hide() : that;
             }
@@ -235,6 +245,43 @@
                 }
                 return that.render(items.slice(0, that.options.items)).show();
             }
+        },
+        showAll: function() {
+            this.$element.focus();
+
+            if (!this.ajax) {
+                return this.lookup();
+            }
+
+            // Cancel last timer if set
+            if (this.ajax.timerId) {
+                clearTimeout(this.ajax.timerId);
+                this.ajax.timerId = null;
+            }
+
+            if (this.ajax.xhr) {
+                this.ajax.xhr.abort();
+                this.ajax.xhr = null;
+                this.ajaxToggleLoadClass(false);
+            }
+
+            function execute() {
+                this.ajaxToggleLoadClass(true);
+
+                // Cancel last call if already in progress
+                if (this.ajax.xhr)
+                    this.ajax.xhr.abort();
+
+                this.ajax.xhr = $.ajax({
+                    url: this.ajax.url,
+                    success: $.proxy(this.ajaxSource, this),
+                    type: this.ajax.method || 'get',
+                    dataType: 'json'
+                });
+                this.ajax.timerId = null;
+            }
+            this.ajax.timerId = setTimeout($.proxy(execute, this), this.ajax.timeout)
+
         },
         matcher: function (item) {
             return ~item.toLowerCase().indexOf(this.query.toLowerCase());
