@@ -248,6 +248,7 @@
         },
         showAll: function() {
             this.$element.focus();
+            this.query = '';
 
             if (!this.ajax) {
                 return this.lookup();
